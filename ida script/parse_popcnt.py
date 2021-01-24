@@ -1,5 +1,6 @@
 import ida_idc
 import ida_bytes
+import ida_search
 from idautils import DecodeInstruction
 from idaapi import get_reg_name
 
@@ -74,28 +75,30 @@ class SecondOperand:
 	def __hash__(self):
 		return hash(self.__key())
 
-if os.path.exists('C:\output_popcnt_parser.txt'):
-	os.remove('C:\output_popcnt_parser.txt')
-output = open('C:\output_popcnt_parser.txt', 'w')
-if os.path.exists('C:\output_popcnt_parser_info.txt'):
-	os.remove('C:\output_popcnt_parser_info.txt')
-output_info = open('C:\output_popcnt_parser_info.txt', 'w')
+outputPath = 'C:\ida output\output_popcnt_parser.txt'
+outputInfoPath = 'C:\ida output\output_popcnt_parser_info.txt'
+if os.path.exists(outputPath):
+	os.remove(outputPath)
+output = open(outputPath, 'w')
+if os.path.exists(outputInfoPath):
+	os.remove(outputInfoPath)
+output_info = open(outputInfoPath, 'w')
 
 imagebase = idaapi.get_imagebase()
-popcntAddr = FindText(0, SEARCH_DOWN, 0, 0, "popcnt")
+popcntAddr = ida_search.find_text(0, 0, 0, "popcnt", SEARCH_DOWN)
 db = {}
 counter = 0
 while popcntAddr != BADADDR:
 	try:
 		popcntSize = get_item_size(popcntAddr)
-		print >> output_info, counter, hex(popcntAddr).rstrip("L"), GetDisasm(popcntAddr), hex(ctypes.c_longlong(GetOperandValue(popcntAddr, 1)).value).rstrip("L"), hex(popcntSize).rstrip("L")
+		print (counter, hex(popcntAddr).rstrip("L"), GetDisasm(popcntAddr), hex(ctypes.c_longlong(get_operand_value(popcntAddr, 1)).value).rstrip("L"), hex(popcntSize).rstrip("L"), file = output_info) 
 		
 		###Second operand parsing
-		if GetOpType(popcntAddr, 0) == o_reg:
+		if get_operand_type(popcntAddr, 0) == o_reg:
 			secondOp = SecondOperand(popcntSize)
 			inst = DecodeInstruction(popcntAddr)
-			if inst.Op2.dtyp != idaapi.dt_qword:
-				if inst.Op2.dtyp == idaapi.dt_dword:
+			if inst.Op2.dtype != idaapi.dt_qword:
+				if inst.Op2.dtype == idaapi.dt_dword:
 					secondOp.is64bit = False
 				else:
 					raise RuntimeError("Parsing error: unsupported data type")
@@ -137,14 +140,14 @@ while popcntAddr != BADADDR:
 			#print counter, secondOp
 			###
 			
-			firstOp = GetOperandValue(popcntAddr, 0)
+			firstOp = get_operand_value(popcntAddr, 0)
 			db.setdefault(firstOp,{}).setdefault(secondOp, []).append(popcntAddr - imagebase)
 		else:
 			raise RuntimeError("Parsing error: bad first operand type ", counter)
 	except RuntimeError as e:
 		print(e)
 
-	popcntAddr = FindText(popcntAddr + popcntSize, SEARCH_DOWN, 0, 0, "popcnt")
+	popcntAddr = ida_search.find_text(popcntAddr + popcntSize, 0, 0, "popcnt", SEARCH_DOWN)
 	#popcntAddr = BADADDR
 	counter += 1
 
@@ -180,7 +183,7 @@ for firstOp in db:
 		code += str(secondOp.instSize) + ")\n"
 
 code += "Finished " + str(counter)
-print >> output, code
+print (code, file = output)
 
 output.close()
 output_info.close()
